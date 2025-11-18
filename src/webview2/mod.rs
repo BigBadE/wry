@@ -35,6 +35,48 @@ use crate::{
 
 type EventRegistrationToken = i64;
 
+// ICoreWebView2ControllerOptions4 interface definition
+// This interface is not yet available in webview2-com, so we define it manually
+// IID: F9B8C498-2773-4F04-8541-6114738A5AB4
+windows::core::imp::define_interface!(
+  ICoreWebView2ControllerOptions4,
+  ICoreWebView2ControllerOptions4_Vtbl,
+  0xf9b8c498_2773_4f04_8541_6114738a5ab4
+);
+
+// Suppress naming convention warnings - we follow WebView2 COM naming conventions
+#[allow(non_snake_case)]
+impl ICoreWebView2ControllerOptions4 {
+  pub unsafe fn put_AllowHostInputProcessing(&self, value: BOOL) -> windows::core::Result<()> {
+    (windows::core::Interface::vtable(self).put_AllowHostInputProcessing)(
+      windows::core::Interface::as_raw(self),
+      value,
+    )
+    .ok()
+  }
+
+  #[allow(dead_code)]
+  pub unsafe fn get_AllowHostInputProcessing(&self) -> windows::core::Result<BOOL> {
+    let mut value = BOOL::default();
+    (windows::core::Interface::vtable(self).get_AllowHostInputProcessing)(
+      windows::core::Interface::as_raw(self),
+      &mut value,
+    )
+    .ok()?;
+    Ok(value)
+  }
+}
+
+#[repr(C)]
+#[allow(non_snake_case)]
+pub struct ICoreWebView2ControllerOptions4_Vtbl {
+  pub base__: windows::core::IUnknown_Vtbl,
+  pub get_AllowHostInputProcessing:
+    unsafe extern "system" fn(this: *mut std::ffi::c_void, value: *mut BOOL) -> windows::core::HRESULT,
+  pub put_AllowHostInputProcessing:
+    unsafe extern "system" fn(this: *mut std::ffi::c_void, value: BOOL) -> windows::core::HRESULT,
+}
+
 const PARENT_SUBCLASS_ID: u32 = WM_USER + 0x64;
 const PARENT_DESTROY_MESSAGE: u32 = WM_USER + 0x65;
 const MAIN_THREAD_DISPATCHER_SUBCLASS_ID: u32 = WM_USER + 0x66;
@@ -134,7 +176,13 @@ impl InnerWebView {
     } else {
       Self::create_environment(&attributes, pl_attrs.clone())?
     };
-    let controller = Self::create_controller(hwnd, &env, attributes.incognito, background_color)?;
+    let controller = Self::create_controller(
+      hwnd,
+      &env,
+      attributes.incognito,
+      background_color,
+      pl_attrs.allow_host_input_processing,
+    )?;
     let webview = Self::init_webview(
       parent,
       hwnd,
@@ -366,6 +414,7 @@ impl InnerWebView {
     env: &ICoreWebView2Environment,
     incognito: bool,
     background_color: Option<(u8, u8, u8, u8)>,
+    allow_host_input_processing: bool,
   ) -> Result<ICoreWebView2Controller> {
     let (tx, rx) = mpsc::channel();
     let env = env.clone();
@@ -401,6 +450,12 @@ impl InnerWebView {
         }
 
         controller_opts.SetIsInPrivateModeEnabled(incognito)?;
+
+        // Set AllowHostInputProcessing if available (WebView2 Runtime >= 138.0.3351.48)
+        if let Ok(opts4) = controller_opts.cast::<ICoreWebView2ControllerOptions4>() {
+          let _ = opts4.put_AllowHostInputProcessing(allow_host_input_processing.into());
+        }
+
         env10.CreateCoreWebView2ControllerWithOptions(hwnd, &controller_opts, &handler)?;
       } else {
         env.CreateCoreWebView2Controller(hwnd, &handler)?

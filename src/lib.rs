@@ -1638,6 +1638,7 @@ pub(crate) struct PlatformSpecificWebViewAttributes {
   extension_path: Option<PathBuf>,
   default_context_menus: bool,
   environment: Option<ICoreWebView2Environment>,
+  allow_host_input_processing: bool,
 }
 
 #[cfg(windows)]
@@ -1653,6 +1654,7 @@ impl Default for PlatformSpecificWebViewAttributes {
       browser_extensions_enabled: false,
       extension_path: None,
       environment: None,
+      allow_host_input_processing: true, // This is WebView2's default behavior
     }
   }
 }
@@ -1729,6 +1731,18 @@ pub trait WebViewBuilderExtWindows {
   /// Set the environment for the webview.
   /// Useful if you need to share the same environment, for instance when using the [`WebViewBuilder::with_new_window_req_handler`].
   fn with_environment(self, environment: ICoreWebView2Environment) -> Self;
+
+  /// Determines whether host input processing is allowed. When this setting is set to `false`,
+  /// the WebView2 control will not process input from the host application. This can improve
+  /// performance in scenarios where the application doesn't need to handle input events.
+  ///
+  /// The default value is `true` (host input processing is enabled).
+  ///
+  /// Requires WebView2 Runtime version 138.0.3351.48 or higher (promoted to stable),
+  /// does nothing on older versions.
+  ///
+  /// <https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/icorewebview2controlleroptions4>
+  fn with_allow_host_input_processing(self, enabled: bool) -> Self;
 }
 
 #[cfg(windows)]
@@ -1775,6 +1789,11 @@ impl WebViewBuilderExtWindows for WebViewBuilder<'_> {
 
   fn with_environment(mut self, environment: ICoreWebView2Environment) -> Self {
     self.platform_specific.environment.replace(environment);
+    self
+  }
+
+  fn with_allow_host_input_processing(mut self, enabled: bool) -> Self {
+    self.platform_specific.allow_host_input_processing = enabled;
     self
   }
 }
